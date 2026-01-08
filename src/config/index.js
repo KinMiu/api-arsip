@@ -12,19 +12,16 @@ const mongoOptions = {
   autoIndex: false,
 };
 
-// const allowedOrigins = ['https://photo-frontend.vercel.app']
-// const allowedOrigins = ['http://localhost:5173']
-const allowedOrigins = ["https://arsip.garnusa.com"];
-
-if (process.env.NODE_DEV === "development") {
-  allowedOrigins.push("*");
-}
+const allowedOrigins = [
+  "http://localhost:5173",
+  // "https://arsip.garnusa.com"
+];
 
 const cors = (req, res, next) => {
-  const requestHost = req.get("origin") || req.get("host");
+  const origin = req.headers.origin;
 
-  if (allowedOrigins.some((origin) => requestHost.match(origin))) {
-    res.header("Access-Control-Allow-Origin", req.get("origin"));
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
     res.header("Access-Control-Allow-Credentials", "true");
   }
 
@@ -32,7 +29,22 @@ const cors = (req, res, next) => {
     "Access-Control-Allow-Headers",
     "Origin, X-Requested-With, Content-Type, Accept, Authorization"
   );
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE");
+
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+  );
+
+  // ⬇️ PENTING untuk axios + blob
+  res.header(
+    "Access-Control-Expose-Headers",
+    "Content-Type, Content-Disposition, X-Preview-Status"
+  );
+
+  // ⬇️ PRE-FLIGHT
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
 
   next();
 };

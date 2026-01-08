@@ -1,56 +1,69 @@
-const mongoose = require('mongoose');
-const collectionName = 'suratKeluar'; // Nama koleksi baru
+const mongoose = require("mongoose");
 
-const schema = new mongoose.Schema(
-    {
-        IDSURATKELUAR: {
-            type: String,
-            required: true,
-        },
-        TANGGAL_KELUAR: {
-            type: Date,
-            required: true,
-        },
-        TANGGAL_SURAT: {
-            type: Date,
-            required: true,
-        },
-        NO_SURAT: {
-            type: String,
-            required: true,
-        },
-        TUJUAN: {
-            type: String,
-            required: true,
-        },
-        PERIHAL: {
-            type: String,
-            required: true,
-        },
-        JENIS_SURAT: {
-            type: String,
-            required: true,
-        },
-        FILE_PATH: {
-            type: String,
-            required: true,
-        },
-        KETERANGAN: {
-            type: String,
-            default: '-',
-        },
-        CREATED_AT: {
-            type: Date,
-            default: () => new Date(),
-        },
-        UPDATED_AT: {
-            type: Date,
-            default: () => new Date(),
-        },
+const RevisiSchema = new mongoose.Schema(
+  {
+    CATATAN: {
+      type: String,
+      required: true,
     },
-    {
-        collection: collectionName,
-    }
+
+    OLEH: {
+      IDPEGAWAI: String,
+      NAMA: String,
+    },
+
+    // 🔽 STATUS PERBAIKAN
+    SUDAH_DIPERBAIKI: {
+      type: Boolean,
+      default: false,
+    },
+
+    DIPERBAIKI_OLEH: {
+      IDPEGAWAI: String,
+      NAMA: String,
+    },
+
+    DIPERBAIKI_AT: Date,
+
+    CREATED_AT: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {_id: false}
 );
 
-module.exports = mongoose.model(collectionName, schema);
+const schema = new mongoose.Schema(
+  {
+    IDSURATKELUAR: String,
+    TANGGAL_SURAT: Date,
+    TANGGAL_KELUAR: Date,
+    NO_SURAT: String,
+    TUJUAN: String,
+    PERIHAL: String,
+    ISI_SURAT: String,
+    JENIS_SURAT: String,
+
+    // 🔥 FILE UTAMA (AKAN DIGANTI SAAT REVISI)
+    FILE_PATH: String,
+
+    REVISI: {
+      type: [RevisiSchema],
+      default: [],
+    },
+
+    STATUS: {
+      type: String,
+      enum: ["DRAFT", "FINAL"],
+      default: "FINAL",
+    },
+
+    CREATED_AT: Date,
+    UPDATED_AT: Date,
+  },
+  {
+    collection: "suratKeluar",
+  }
+);
+
+module.exports = mongoose.model("suratKeluar", schema);

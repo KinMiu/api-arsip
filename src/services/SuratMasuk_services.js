@@ -1,236 +1,139 @@
-const model = require('../model/SuratMasuk')
-const { requestResponse, upload } = require('../utils/index')
+const model = require("../model/SuratMasuk");
+const {requestResponse} = require("../utils/index");
 
+/**
+ * CREATE SURAT MASUK
+ */
 const create = async (data) => {
+  const result = await model.create(data);
+  return {...requestResponse.success, data: result};
+};
 
-    // console.log(data)
-    const Upload = await model.create(data)
-    // console.log("ini =>> ", upload)
-    return { ...requestResponse.success, data: Upload }
-}
-
+/**
+ * SET DISPOSISI (1 PEMIMPIN SAJA)
+ */
 const addDisposisi = async (condition, data) => {
-    console.log(data)
-    return await model.updateOne(
-        condition,
-        {
-            $push: {
-                DISPOSISI: {
-                    PEGAWAI: data.pegawai,
-                    CATATAN: data.catatan || '-',
-                    SUDAH_DILIHAT: false,
-                    TANGGAL_DISPOSISI: new Date()
-                }
-            },
-            updatedAt: new Date()
-        },
-        { new: true }
-    )
-}
-
-const deleteDisposisi = async (idSurat, idPegawai) => {
-    return await model.updateOne(
-        { IDSURATMASUK: idSurat },
-        { $pull: { DISPOSISI: { PEGAWAI: idPegawai } } }
-    );
+  return await model.updateOne(condition, {
+    $set: {
+      DISPOSISI: {
+        PEGAWAI: data.pegawai, // IDPEGAWAI pemimpin
+        CATATAN: data.catatan || "-",
+        SUDAH_DILIHAT: false,
+        SUDAH_DISETUJUI: false,
+      },
+      UPDATED_AT: new Date(),
+    },
+  });
 };
 
-const getAll = async () => {
-    return await model.aggregate([
-        {
-            $unwind: {
-                path: "$DISPOSISI",
-                preserveNullAndEmptyArrays: true,
-            },
-        },
-        {
-            $lookup: {
-                from: "pegawai",
-                localField: "DISPOSISI.PEGAWAI",
-                foreignField: "IDPEGAWAI",
-                as: "DISPOSISI.PEGAWAI_DETAIL",
-            },
-        },
-        {
-            $unwind: {
-                path: "$DISPOSISI.PEGAWAI_DETAIL",
-                preserveNullAndEmptyArrays: true,
-            },
-        },
-        // 🔍 Tambahkan lookup ke koleksi jenissurat
-        {
-            $lookup: {
-                from: "jenisSurat",              // nama koleksi jenis surat
-                localField: "JENIS_SURAT",       // field di surat masuk (bisa ID atau kode)
-                foreignField: "IDJENISSURAT",    // field di koleksi jenissurat
-                as: "JENIS_SURAT_DETAIL",
-            },
-        },
-        {
-            $unwind: {
-                path: "$JENIS_SURAT_DETAIL",
-                preserveNullAndEmptyArrays: true,
-            },
-        },
-        {
-            $group: {
-                _id: "$IDSURATMASUK",
-                IDSURATMASUK: { $first: "$IDSURATMASUK" },
-                TANGGAL_TERIMA: { $first: "$TANGGAL_TERIMA" },
-                TANGGAL_SURAT: { $first: "$TANGGAL_SURAT" },
-                NO_SURAT: { $first: "$NO_SURAT" },
-                PENGIRIM: { $first: "$PENGIRIM" },
-                PERIHAL: { $first: "$PERIHAL" },
-                JENIS_SURAT: { $first: "$JENIS_SURAT_DETAIL" }, // gunakan hasil lookup
-                FILE_PATH: { $first: "$FILE_PATH" },
-                KETERANGAN: { $first: "$KETERANGAN" },
-                CREATED_AT: { $first: "$CREATED_AT" },
-                UPDATED_AT: { $first: "$UPDATED_AT" },
-                DISPOSISI: {
-                    $push: {
-                        PEGAWAI: "$DISPOSISI.PEGAWAI_DETAIL",
-                        CATATAN: "$DISPOSISI.CATATAN",
-                        SUDAH_DILIHAT: "$DISPOSISI.SUDAH_DILIHAT",
-                        TANGGAL_DISPOSISI: "$DISPOSISI.TANGGAL_DISPOSISI",
-                    },
-                },
-            },
-        },
-        {
-            $sort: {
-                CREATED_AT: -1 // ⬅ urutkan dari terbaru ke terlama
-            }
-        },
-        {
-            $project: {
-                _id: 0,
-            },
-        },
-    ]);
-};
-
+/**
+ * TANDAI DISPOSISI SUDAH DILIHAT
+ */
 const tandaiDisposisiSudahDilihat = async (idSurat, idPegawai) => {
-    return await model.updateOne(
-        {
-            IDSURATMASUK: idSurat,
-            "DISPOSISI.PEGAWAI": idPegawai
-        },
-        {
-            $set: { "DISPOSISI.$.SUDAH_DILIHAT": true }
-        }
-    );
+  return await model.updateOne(
+    {
+      IDSURATMASUK: idSurat,
+      "DISPOSISI.PEGAWAI": idPegawai,
+    },
+    {
+      $set: {
+        "DISPOSISI.SUDAH_DILIHAT": true,
+        "DISPOSISI.TANGGAL_DILIHAT": new Date(),
+        UPDATED_AT: new Date(),
+      },
+    }
+  );
 };
 
-const getByDisposisi = async (condition) => {
-    return await model.aggregate([
-        {
-            $unwind: {
-                path: "$DISPOSISI",
-                preserveNullAndEmptyArrays: false
-            }
-        },
-        {
-            $match: {
-                "DISPOSISI.PEGAWAI": condition.IDSURATMASUK
-            }
-        },
-        {
-            $lookup: {
-                from: "pegawai",
-                localField: "DISPOSISI.PEGAWAI",
-                foreignField: "IDPEGAWAI",
-                as: "DISPOSISI.PEGAWAI_DETAIL"
-            }
-        },
-        {
-            $unwind: {
-                path: "$DISPOSISI.PEGAWAI_DETAIL",
-                preserveNullAndEmptyArrays: true
-            }
-        },
-        {
-            $lookup: {
-                from: "jenissurat",
-                localField: "JENIS_SURAT",
-                foreignField: "IDJENISSURAT",
-                as: "JENIS_SURAT_DETAIL"
-            }
-        },
-        {
-            $unwind: {
-                path: "$JENIS_SURAT_DETAIL",
-                preserveNullAndEmptyArrays: true
-            }
-        },
-        {
-            $group: {
-                _id: "$IDSURATMASUK",
-                IDSURATMASUK: { $first: "$IDSURATMASUK" },
-                TANGGAL_TERIMA: { $first: "$TANGGAL_TERIMA" },
-                TANGGAL_SURAT: { $first: "$TANGGAL_SURAT" },
-                NO_SURAT: { $first: "$NO_SURAT" },
-                PENGIRIM: { $first: "$PENGIRIM" },
-                PERIHAL: { $first: "$PERIHAL" },
-                JENIS_SURAT: { $first: "$JENIS_SURAT" },
-                JENIS_SURAT_DETAIL: { $first: "$JENIS_SURAT_DETAIL" },
-                FILE_PATH: { $first: "$FILE_PATH" },
-                KETERANGAN: { $first: "$KETERANGAN" },
-                CREATED_AT: { $first: "$CREATED_AT" },
-                UPDATED_AT: { $first: "$UPDATED_AT" },
-                DISPOSISI: {
-                    $push: {
-                        PEGAWAI: "$DISPOSISI.PEGAWAI_DETAIL",
-                        CATATAN: "$DISPOSISI.CATATAN",
-                        SUDAH_DILIHAT: "$DISPOSISI.SUDAH_DILIHAT",
-                        TANGGAL_DISPOSISI: "$DISPOSISI.TANGGAL_DISPOSISI"
-                    }
-                }
-            }
-        },
-        {
-            $project: {
-                _id: 0
-            }
-        }
-    ]);
+/**
+ * PARAF SURAT (PEMIMPIN)
+ */
+const parafSurat = async (idSurat, idPegawai, fileParafUrl) => {
+  return await model.updateOne(
+    {
+      IDSURATMASUK: idSurat,
+      "DISPOSISI.PEGAWAI": idPegawai,
+      "DISPOSISI.SUDAH_DILIHAT": true, // wajib sudah baca
+    },
+    {
+      $set: {
+        FILE_PATH: fileParafUrl, // overwrite PDF
+        "DISPOSISI.SUDAH_DISETUJUI": true,
+        "DISPOSISI.TANGGAL_DISETUJUI": new Date(),
+        UPDATED_AT: new Date(),
+      },
+    }
+  );
 };
 
+/**
+ * AMBIL SEMUA SURAT MASUK
+ */
+const getAll = async () => {
+  return await model.find({}, {_id: 0}).sort({CREATED_AT: -1});
+};
+
+/**
+ * AMBIL SURAT MASUK BY ID
+ */
 const getById = async (condition) => {
-    return model.findOne(condition)
-}
+  return await model.findOne(condition, {_id: 0});
+};
 
+/**
+ * UPDATE SURAT MASUK
+ */
 const updateOne = async (condition, body) => {
-    const findData = await model.findOne(condition)
-    const updateData = await model.updateOne(condition, body)
-    console.log(findData)
-    return updateData
-}
+  body.UPDATED_AT = new Date();
+  return await model.updateOne(condition, body);
+};
 
+/**
+ * DELETE SURAT MASUK
+ */
 const deleteOne = async (condition) => {
-    const deleteOne = await model.deleteOne(condition)
-    return { ...deleteOne }
-}
+  return await model.deleteOne(condition);
+};
 
+/**
+ * DELETE SEMUA DATA (DEV ONLY)
+ */
 const deleteAll = async () => {
-    const deleteManySample = await modelSample.deleteMany({})
-    const deletePegawai = await model.deleteMany({})
-    return { ...deletePegawai, deleteManySample }
-}
+  return await model.deleteMany({});
+};
 
-const getCount = (condition) => {
-    return model.countDocuments(condition)
-}
+/**
+ * HITUNG DATA
+ */
+const getCount = (condition = {}) => {
+  return model.countDocuments(condition);
+};
+
+/**
+ * AMBIL SURAT MASUK YANG SUDAH ADA DISPOSISI
+ */
+const getWithDisposisi = async () => {
+  return await model
+    .find(
+      {
+        DISPOSISI: {$exists: true},
+        "DISPOSISI.PEGAWAI": {$ne: null},
+      },
+      {_id: 0}
+    )
+    .sort({CREATED_AT: -1});
+};
 
 module.exports = {
-    create,
-    getAll,
-    updateOne,
-    getById,
-    deleteOne,
-    deleteAll,
-    getCount,
-    tandaiDisposisiSudahDilihat,
-    addDisposisi,
-    getByDisposisi,
-    deleteDisposisi
-}
+  create,
+  addDisposisi,
+  parafSurat,
+  tandaiDisposisiSudahDilihat,
+  getAll,
+  getWithDisposisi,
+  getById,
+  updateOne,
+  deleteOne,
+  deleteAll,
+  getCount,
+};
